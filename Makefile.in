@@ -75,7 +75,11 @@ install : Make_coq
 	$(MAKE) -f $< install
 	cp dpd2dot dpdusage $(BINDIR)/
 
-$(DPDPLUGIN) : Make_coq $(DISTRIBUTED)
+dpdgraph.cmxs : Make_coq $(DISTRIBUTED)
+	$(ECHO_CIBLE)
+	$(MAKE) -f $< $@
+
+$(DPDPLUGIN) : Make_coq dpdgraph.cmxs $(DISTRIBUTED)
 	$(ECHO_CIBLE)
 	$(MAKE) -f $< $@
 
