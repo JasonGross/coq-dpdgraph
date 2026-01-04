@@ -3,7 +3,7 @@
 
 opam-version: "2.0"
 maintainer: "palmskog@gmail.com"
-version: "dev"
+version: "1.0+9.1"
 
 homepage: "https://github.com/rocq-community/coq-dpdgraph"
 dev-repo: "git+https://github.com/rocq-community/coq-dpdgraph.git"
@@ -21,8 +21,8 @@ run-test: [make "-j%{jobs}%" "test-suite"]
 install: [make "install"]
 depends: [
   "ocaml" {>= "4.09.0"}
-  "coq" 
-  "ocamlgraph" 
+  "coq"
+  "ocamlgraph"
 ]
 
 tags: [
