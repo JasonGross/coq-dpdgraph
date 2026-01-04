@@ -1,6 +1,6 @@
 opam-version: "2.0"
 maintainer: "palmskog@gmail.com"
-version: "dev"
+version: "1.0+8.20"
 
 homepage: "https://github.com/coq-community/coq-dpdgraph"
 dev-repo: "git+https://github.com/coq-community/coq-dpdgraph.git"
@@ -22,9 +22,9 @@ run-test: [make "test-suite"]
 install: [make "install" "BINDIR=%{bin}%"]
 depends: [
   "ocaml" {>= "4.05.0"}
-  "coq" {= "dev"}
+  "coq" {>= "8.20" & < "8.21~"}
   "conf-autoconf" {build & dev}
-  "ocamlgraph" 
+  "ocamlgraph"
 ]
 
 tags: [
