@@ -268,8 +268,6 @@ VERNAC COMMAND EXTEND DependGraphSetFile CLASSIFIED AS SIDEFF
 | ["Set" "DependGraph" "File" string(str)] -> { filename := str }
 END
 
-(* Note: Set/Unset DependGraph AccessOpaque is handled by Goptions in searchdepend.mlg *)
-
 (*
 VERNAC ARGUMENT EXTEND dirpath
 | [ string(str) ] -> { Globnames.dirpath_of_string str }
