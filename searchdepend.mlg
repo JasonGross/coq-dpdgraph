@@ -69,6 +69,11 @@ let collect_long_names avoid (c:Constr.t) (acc:Data.t) =
 
 exception NoDef of Names.GlobRef.t
 
+let is_opaque_constant cb =
+  match cb.Declarations.const_body with
+  | Declarations.OpaqueDef _ -> true
+  | _ -> false
+
 (** Module structure lookup for accessing bodies hidden by module type constraints.
     Based on the approach used by Print Assumptions in vernac/assumptions.ml *)
 module ModLookup : sig
@@ -76,10 +81,11 @@ module ModLookup : sig
   val get_constant_body : Global.indirect_accessor -> Names.Constant.t -> Constr.t option
   val lookup_mind : Names.MutInd.t -> Declarations.mutual_inductive_body
 end = struct
-(* This module is adapted from Coq's assumptions.ml and is thus licensed under Coq's license, the GNU Lesser General Public License Version 2.1 *)
+(* This module is copied verbatim from Rocq's assumptions.ml and is thus licensed under Rocq's license, the GNU Lesser General Public License Version 2.1 *)
 open Util
 open Names
 open Declarations
+open Mod_declarations
 
 (** For a constant c in a module sealed by an interface (M:T and
     not M<:T), [Global.lookup_constant] may return a [constant_body]
@@ -118,7 +124,7 @@ let rec fields_of_functor f subs mp0 args = function
     match args with
     | [] -> assert false (* we should only encounter applied functors *)
     | mpa :: args ->
-      let subs = join (map_mbid mbid mpa empty_delta_resolver (*TODO*)) subs in
+      let subs = join (map_mbid mbid mpa (empty_delta_resolver mpa) (*TODO*)) subs in
       fields_of_functor f subs mp0 args e
 
 let rec lookup_module_in_impl mp =
@@ -142,19 +148,27 @@ and memoize_fields_of_mp mp =
 and fields_of_mp mp =
   let open Mod_subst in
   let mb = lookup_module_in_impl mp in
-  let fields,inner_mp,subs = fields_of_mb empty_subst mb [] in
+  let fields,inner_mp,subs = fields_of_mb empty_subst mp mb [] in
+  let delta_mb = mod_delta mb in
   let subs =
+    (* XXX this code makes little sense, adding a delta_mb to subs if the root
+       does not coincide with mp used to be equivalent to a no-op and now fails
+       with an assertion failure. More likely than not, this means that we have
+       no idea about what we are doing. *)
     if ModPath.equal inner_mp mp then subs
-    else add_mp inner_mp mp mb.mod_delta subs
+    else if has_root_delta_resolver mp delta_mb then
+      add_mp inner_mp mp delta_mb subs
+    else
+      add_mp inner_mp mp (empty_delta_resolver mp) subs
   in
-  Modops.subst_structure subs fields
+  Modops.subst_structure subs mp fields
 
-and fields_of_mb subs mb args = match mb.mod_expr with
-  | Algebraic expr -> fields_of_expression subs mb.mod_mp args mb.mod_type expr
+and fields_of_mb subs mp mb args = match Mod_declarations.mod_expr mb with
+  | Algebraic expr -> fields_of_expression subs mp args (mod_type mb) expr
   | Struct sign ->
-    let sign = Modops.annotate_struct_body sign mb.mod_type in
-    fields_of_signature subs mb.mod_mp args sign
-  | Abstract|FullStruct -> fields_of_signature subs mb.mod_mp args mb.mod_type
+    let sign = Modops.annotate_struct_body sign (mod_type mb) in
+    fields_of_signature subs mp args sign
+  | Abstract|FullStruct -> fields_of_signature subs mp args (mod_type mb)
 
 (** The Abstract case above corresponds to [Declare Module] *)
 
@@ -166,8 +180,9 @@ and fields_of_signature x =
 
 and fields_of_expr subs mp0 args = function
   | MEident mp ->
-    let mb = lookup_module_in_impl (Mod_subst.subst_mp subs mp) in
-    fields_of_mb subs mb args
+    let mp = Mod_subst.subst_mp subs mp in
+    let mb = lookup_module_in_impl mp in
+    fields_of_mb subs mp mb args
   | MEapply (me1,mp2) -> fields_of_expr subs mp0 (mp2::args) me1
   | MEwith _ -> assert false (* no 'with' in [mod_expr] *)
 
@@ -232,56 +247,44 @@ let get_constant_body access kn =
 
 end
 
-let is_opaque_constant cb =
-  match cb.Declarations.const_body with
-  | Declarations.OpaqueDef _ -> true
-  | _ -> false
-
-let collect_dependance gref =
+let collect_dependance opaque_access gref =
   let open Names in
   let open GlobRef in
   match gref with
   | VarRef _ -> assert false
   | ConstRef cst ->
-      let cb = Environ.lookup_constant cst (Global.env()) in
+      let cb = ModLookup.lookup_constant cst in
       let cl =
         (* Skip opaque bodies when access_opaque flag is unset *)
         if access_opaque () || not (is_opaque_constant cb) then
-          match (try ModLookup.get_constant_body Library.indirect_accessor cst
-                 with _ ->
-                   match Global.body_of_constant_body Library.indirect_accessor cb with
-                   | Some (e,_,_) -> Some e
-                   | None -> None)
-          with
+          match ModLookup.get_constant_body opaque_access cst with
           | Some e -> [e]
           | None -> []
         else
           []
       in
-      let cl = (try ModLookup.lookup_constant cst
-                with _ -> cb).Declarations.const_type :: cl in
+      let cl = cb.Declarations.const_type :: cl in
       List.fold_right (collect_long_names []) cl Data.empty
   | IndRef (mind, n) | ConstructRef ((mind, n),_) ->
-      let mib =
-        try ModLookup.lookup_mind mind
-        with _ -> Environ.lookup_mind mind (Global.env())
-      in
+      let mib = ModLookup.lookup_mind mind in
       let indbody = mib.Declarations.mind_packets.(n) in
       let ca = indbody.Declarations.mind_user_lc in
         Array.fold_right (collect_long_names [mind]) ca Data.empty
 
-let display_dependance gref =
+let display_dependance ~opaque_access gref =
   let display d =
     let pp gr n s =
       Printer.pr_global gr ++ str "(" ++ int n ++ str ")" ++ spc() ++s
     in
       Feedback.msg_notice (str"[" ++ ((Data.fold pp) d (str "]")))
-  in try let data = collect_dependance gref in display data
+  in try let data = collect_dependance opaque_access gref in display data
   with NoDef gref ->
     CErrors.user_err (Printer.pr_global gref ++ str " has no value")
 
 }
 
-VERNAC COMMAND EXTEND Searchdepend CLASSIFIED AS QUERY
-| ["SearchDepend" global(ref) ] -> { display_dependance (Nametab.global ref) }
+VERNAC COMMAND EXTEND Searchdepend CLASSIFIED AS QUERY STATE opaque_access
+| ["SearchDepend" global(ref) ] ->
+  {fun ~opaque_access ->
+   display_dependance ~opaque_access (Nametab.global ref) }
 END

@@ -162,7 +162,7 @@ end
   * If [all], add also the nodes of the dependancies that are not in,
   * and return the list of the new nodes,
   * If not all, don't add nodes, and return an empty list. *)
-let add_gref_dpds graph ~all n_gref todo =
+let add_gref_dpds opaque_access graph ~all n_gref todo =
   let gref = G.Node.gref n_gref in
   debug (str "Add dpds " ++ pr_global_safe gref);
   let add_dpd dpd nb_use (g, td) = match G.get_node g dpd with
@@ -175,7 +175,7 @@ let add_gref_dpds graph ~all n_gref todo =
         else g, td
   in
     try
-      let data = Searchdepend.collect_dependance gref in
+      let data = Searchdepend.collect_dependance opaque_access gref in
       let graph, todo = Searchdepend.Data.fold add_dpd data (graph, todo) in
         graph, todo
     with
@@ -192,12 +192,12 @@ let add_gref_only (graph, todo) gref =
     graph, todo
 
 (** add the gref in [l] and build the dependencies according to [all] *)
-let add_gref_list_and_dpds graph ~all l =
+let add_gref_list_and_dpds opaque_access graph ~all l =
   let graph, todo = List.fold_left add_gref_only (graph, []) l in
   let rec add_gref_dpds_rec graph todo = match todo with
     | [] -> graph
     | n::todo ->
-        let graph, todo = add_gref_dpds graph ~all n todo in
+        let graph, todo = add_gref_dpds opaque_access graph ~all n todo in
           add_gref_dpds_rec graph todo
   in
   let graph = add_gref_dpds_rec graph todo in
@@ -209,23 +209,19 @@ module Out : sig
 end = struct
 
   let add_cnst_body_attrib acc cnst =
-    try
-      let cb = Searchdepend.ModLookup.lookup_constant cnst in
-      let acc = match cb.Declarations.const_body with
-        | Declarations.OpaqueDef _ -> ("body", "yes")::acc
-        | Declarations.Def _ -> ("body", "yes")::acc
-        | Declarations.Undef _  -> ("body", "no")::acc
-        | Declarations.Primitive _ -> ("body", "no")::acc
-        | Declarations.Symbol _ -> ("body", "no")::acc
-      in acc
-    with exn when CErrors.noncritical exn || CErrors.is_anomaly exn -> acc
+    let cb = Searchdepend.ModLookup.lookup_constant cnst in
+    let acc = match cb.Declarations.const_body with
+      | Declarations.OpaqueDef _ -> ("body", "yes")::acc
+      | Declarations.Def _ -> ("body", "yes")::acc
+      | Declarations.Undef _  -> ("body", "no")::acc
+      | Declarations.Primitive _ -> ("body", "no")::acc
+      | Declarations.Symbol _ -> ("body", "no")::acc
+    in acc
 
   let add_cnst_opaque_attrib acc cnst =
     try
-      let cb =
-        try Searchdepend.ModLookup.lookup_constant cnst
-        with _ -> Environ.lookup_constant cnst (Global.env())
-      in
+      let env = Global.env() in
+      let cb = Environ.lookup_constant cnst env in
       let acc = match cb.Declarations.const_body with
         | Declarations.OpaqueDef _ -> ("opaque", "yes")::acc
         | Declarations.Def _ -> ("opaque", "no")::acc
@@ -287,17 +283,17 @@ end = struct
       error (str "cannot open file: " ++ (str msg));
 end
 
-let mk_dpds_graph grefs =
+let mk_dpds_graph opaque_access grefs =
   let graph = G.empty in
   let all = true in (* get all the dependencies recursively *)
-  let graph = add_gref_list_and_dpds graph ~all grefs in
+  let graph = add_gref_list_and_dpds opaque_access graph ~all grefs in
     Out.file graph
 
-let file_graph_depend dirlist =
+let file_graph_depend opaque_access dirlist =
   let graph = G.empty in
   let grefs = get_dirlist_grefs dirlist in
   let all = false in (* then add the dependencies only to existing nodes *)
-  let graph = add_gref_list_and_dpds graph ~all grefs in
+  let graph = add_gref_list_and_dpds opaque_access graph ~all grefs in
     Out.file graph
 
 let locate_mp_dirpath qid =
@@ -308,7 +304,7 @@ let locate_mp_dirpath qid =
 
 }
 
-VERNAC COMMAND EXTEND DependGraphSetFile CLASSIFIED AS QUERY
+VERNAC COMMAND EXTEND DependGraphSetFile CLASSIFIED AS SIDEFF
 | ["Set" "DependGraph" "File" string(str)] -> { filename := str }
 END
 
@@ -323,9 +319,10 @@ VERNAC ARGUMENT EXTEND dirlist
 END
 *)
 
-VERNAC COMMAND EXTEND DependGraph CLASSIFIED AS QUERY
+VERNAC COMMAND EXTEND DependGraph CLASSIFIED AS QUERY STATE opaque_access
   | ["Print" "DependGraph" reference_list(refs) ] ->
-      { mk_dpds_graph (List.map Nametab.global refs) }
+      { fun ~opaque_access -> mk_dpds_graph opaque_access (List.map Nametab.global refs) }
   | ["Print" "FileDependGraph" reference_list(dl) ] ->
-      { file_graph_depend (List.map locate_mp_dirpath dl) }
+      { fun ~opaque_access ->
+        file_graph_depend opaque_access (List.map locate_mp_dirpath dl) }
 END

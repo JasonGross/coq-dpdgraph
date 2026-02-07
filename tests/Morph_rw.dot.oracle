@@ -6,8 +6,8 @@ Morphisms_trans_sym_co_inv_impl_morphism [label="trans_sym_co_inv_impl_morphism"
 Morph_FsmpM_Proper [label="FsmpM_Proper", URL=<Morph.html#FsmpM_Proper>, fillcolor="#FFB57F"] ;
 Morph_F [label="F", URL=<Morph.html#F>, fillcolor="#FACDEF"] ;
 Morph_Fsmp [label="Fsmp", URL=<Morph.html#Fsmp>, fillcolor="#FACDEF"] ;
-RelationClasses_Equivalence_PER [label="Equivalence_PER", URL=<RelationClasses.html#Equivalence_PER>, fillcolor="#7FFFD4"] ;
 Morph_Fequiv [label="Fequiv", URL=<Morph.html#Fequiv>, fillcolor="#FACDEF"] ;
+RelationClasses_Equivalence_PER [label="Equivalence_PER", URL=<RelationClasses.html#Equivalence_PER>, fillcolor="#7FFFD4"] ;
 Morph_FequivR [label="FequivR", URL=<Morph.html#FequivR>, fillcolor="#7FFFD4"] ;
 Morph_Fequiv_trans [label="Fequiv_trans", URL=<Morph.html#Fequiv_trans>, fillcolor="#FFB57F"] ;
 Morph_Fequiv_refl [label="Fequiv_refl", URL=<Morph.html#Fequiv_refl>, fillcolor="#FFB57F"] ;
@@ -42,11 +42,11 @@ RelationClasses_transitivity [label="transitivity", URL=<RelationClasses.html#tr
   Morph_FsmpM_Proper -> Morphisms_Proper [] ;
   Morph_FsmpM_Proper -> Morphisms_respectful [] ;
   Morph_Fsmp -> Morph_F [] ;
+  Morph_Fequiv -> Morph_F [] ;
   RelationClasses_Equivalence_PER -> RelationClasses_Equivalence_Transitive [] ;
   RelationClasses_Equivalence_PER -> RelationClasses_Equivalence_Symmetric [] ;
   RelationClasses_Equivalence_PER -> RelationClasses_PER [] ;
   RelationClasses_Equivalence_PER -> RelationClasses_Build_PER [] ;
-  Morph_Fequiv -> Morph_F [] ;
   Morph_FequivR -> Morph_Fequiv_trans [] ;
   Morph_FequivR -> Morph_Fequiv_refl [] ;
   Morph_FequivR -> Morph_Fequiv_sym [] ;
